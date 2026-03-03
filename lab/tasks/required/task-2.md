@@ -24,7 +24,9 @@ The back-end contains intentional bugs that you will discover and fix by writing
     - [1.3.2. Add a new unit test](#132-add-a-new-unit-test)
     - [1.3.3. Fix the bug](#133-fix-the-bug)
     - [1.3.4. Rerun unit tests](#134-rerun-unit-tests)
-    - [1.3.5. Deploy the fixed version to the VM](#135-deploy-the-fixed-version-to-the-vm)
+    - [1.3.6. Commit your changes](#136-commit-your-changes)
+    - [1.3.5. Transfer the changes to your VM](#135-transfer-the-changes-to-your-vm)
+    - [1.3.6. Deploy the fixed `app` service on your VM](#136-deploy-the-fixed-app-service-on-your-vm)
   - [1.4. Part B: Run end-to-end tests remotely](#14-part-b-run-end-to-end-tests-remotely)
     - [1.4.1. Set the required environment variables in the terminal](#141-set-the-required-environment-variables-in-the-terminal)
     - [1.4.2. Run existing end-to-end tests](#142-run-existing-end-to-end-tests)
@@ -46,6 +48,9 @@ The back-end contains intentional bugs that you will discover and fix by writing
 
 Follow the [`Git workflow`](../../../wiki/git-workflow.md) to complete this task.
 
+> [!IMPORTANT]
+> You work on the [`<task-branch>`](../../../wiki/git-workflow.md#task-branch).
+
 ### 1.2. Create a `Lab Task` issue
 
 Title: `[Task] Back-end Testing`
@@ -57,7 +62,7 @@ Title: `[Task] Back-end Testing`
 - [1.3.2. Add a new unit test](#132-add-a-new-unit-test)
 - [1.3.3. Fix the bug](#133-fix-the-bug)
 - [1.3.4. Rerun unit tests](#134-rerun-unit-tests)
-- [1.3.5. Commit the fix](#135-commit-the-fix)
+- [1.3.5. Deploy the fixed `app` service on your VM](#136-deploy-the-fixed-app-service-on-your-vm)
 
 > [!NOTE]
 > Unit tests do not require a running server. They test individual functions in isolation.
@@ -181,7 +186,7 @@ Title: `[Task] Back-end Testing`
    ===================== 4 passed in X.XXs =====================
    ```
 
-#### 1.3.5. Deploy the fixed version to the VM
+#### 1.3.6. Commit your changes
 
 1. [Commit](../../../wiki/git-workflow.md#commit) your changes.
 
@@ -191,12 +196,59 @@ Title: `[Task] Back-end Testing`
    fix: use <= instead of < in max_item_id filter
    ```
 
-2. Push the fix to `GitHub`.
+#### 1.3.5. Transfer the changes to your VM
 
-<!-- TODO open an existing terminal or connect to the VM in a new terminal -->
-<!-- TODO pull branch on the VM -->
-<!-- TODO docker compose down app -->
-<!-- TODO docker compose up app --build -->
+> [!NOTE]
+> See [`origin`](../../../wiki/github.md#origin).
+
+1. [Push commits to `<task-branch>` on `origin`](../../../wiki/git-workflow.md#push-commits).
+
+   Replace [`<task-branch>`](../../../wiki/git-workflow.md#task-branch).
+
+2. [Open a new `VS Code Terminal`](../../../wiki/vs-code.md#open-a-new-vs-code-terminal).
+
+3. [Connect to the VM](../../../wiki/ssh.md#connect-to-the-vm).
+
+4. To navigate to the repository directory on the VM,
+
+   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
+
+   ```terminal
+   cd se-toolkit-lab-4
+   ```
+
+5. [Pull the latest changes from `<task-branch>` on `origin`](../../../wiki/git-vscode.md#pull-changes-from-branch-on-remote-using-the-vs-code-terminal).
+
+   Replace [`<task-branch>`](../../../wiki/git-workflow.md#task-branch).
+
+6. [Switch to `<task-branch>`](../../../wiki/git-vscode.md#switch-to-an-existing-branch-using-vs-code-terminal).
+
+   Replace [`<task-branch>`](../../../wiki/git-workflow.md#task-branch).
+
+#### 1.3.6. Deploy the fixed `app` service on your VM
+
+1. To rebuild and start the [`app` service](../../../wiki/docker-compose-yml.md#app-service) in [background](../../../wiki/operating-system.md#background-process),
+
+   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
+
+   ```terminal
+   docker compose --env-file .env.docker.secret up app --build --force-recreate -d
+   ```
+
+2. To verify the service is running,
+
+   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
+
+   ```terminal
+   docker compose --env-file .env.docker.secret ps app --format "table {{.Service}}\t{{.Status}}"
+   ```
+
+   The output should be similar to this:
+
+   ```terminal
+   SERVICE   STATUS
+   app       Up 1 minute
+   ```
 
 ### 1.4. Part B: Run end-to-end tests remotely
 
@@ -337,9 +389,11 @@ Title: `[Task] Back-end Testing`
 
 #### 1.4.5. Redeploy and rerun
 
-1. [Deploy the fixed version to the VM](#135-deploy-the-fixed-version-to-the-vm).
+1. [Transfer the changes to your VM](#135-transfer-the-changes-to-your-vm)
 
-2. To run the end-to-end tests,
+2. [Deploy the fixed `app` service on your VM](#136-deploy-the-fixed-app-service-on-your-vm).
+
+3. To run the end-to-end tests,
 
    [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
 
@@ -347,7 +401,7 @@ Title: `[Task] Back-end Testing`
    uv run poe test-e2e
    ```
 
-3. All end-to-end tests should pass.
+4. All end-to-end tests should pass.
 
    The output should be similar to this:
 
