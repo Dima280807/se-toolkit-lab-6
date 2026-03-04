@@ -325,12 +325,13 @@ Method 2:
 
    You should see on:
 
-   - `Windows`: `bash`;
+   - `Windows`: `bash`
 
       If you see something else, you're not using [`VS Code`](#what-is-vs-code) in [`Linux`](./linux.md#what-is-linux).
 
       [Switch to the `Linux` shell for the `VS Code Terminal`](#windows-only-switch-to-the-linux-shell-for-the-vs-code-terminal).
-   - `macOS`, `Linux`: [`zsh`](./shell.md#zsh), [`bash`](./shell.md#bash), or another [shell](./shell.md#shell-variants) name;
+
+   - `macOS`, `Linux`: [`zsh`](./shell.md#zsh), [`bash`](./shell.md#bash), or another [shell](./shell.md#shell-variants) name
 
 ### Expand the sidebar with open `VS Code Terminal`s
 
@@ -356,7 +357,7 @@ Method 2:
 
      <img alt="Terminal Default Profile - Outside WSL" src="./images/vs-code/command-palette-default-terminal-profile-outside-wsl-wsl.png" style="width:400px"></img>
 
-     Follow the instructions for [setting the default shell](#windows-only-set-the-default-shell-for-the-vs-code-terminal) again.
+     [Switch to the `Linux` shell for the `VS Code Terminal`](#windows-only-switch-to-the-linux-shell-for-the-vs-code-terminal) again.
 
    - Case 3 (the best): You're running `VS Code` inside `WSL`. You've probably [opened the directory inside `WSL`](#windows-only-open-the-directory-in-wsl). This is the best case.
 
