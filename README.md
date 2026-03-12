@@ -10,24 +10,46 @@ The lab gets updated regularly, so do [sync your fork with the upstream](https:/
 - [Tasks](#tasks)
   - [Prerequisites](#prerequisites)
   - [Required](#required)
+  - [Optional (recommended)](#optional-recommended)
 
 ## Lab story
 
-You have a running Learning Management Service — a backend, a database full of analytics data, and a frontend dashboard. The course is coming to a close and you need to review everything you've learned.
+> "Everybody should implement an agent loop at some point. It's the hello-world of agentic engineering."
 
-Instead of manually reviewing, you'll build a **CLI agent** that can answer questions about the course and about your own system. The agent uses an LLM with tools to read your codebase and query your API.
+You will build a CLI agent that can answer questions by reading the lab docs, connecting to your VM backend. You then will evaluate the agents against a benchmark.
 
-An evaluation benchmark tests your agent with ~30 questions. You can't see the questions upfront — you discover them by running the checker. Each failed question tells you what went wrong, and you fix it. By the time your agent passes, you've reviewed the course material and understood how agents work.
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Your VM                                                     │
+│                                                              │
+│  ┌──────────────┐     ┌──────────────────────────────────┐   │
+│  │  agent.py    │────▶│  OpenRouter API                  │   │
+│  │  (CLI)       │◀────│  (a free LLM with tool use)      │   │
+│  └──────┬───────┘     └──────────────────────────────────┘   │
+│         │                                                    │
+│         │ tool calls                                         │
+│         ├──────────▶ read_file(path) ──▶ source code, wiki/  │
+│         ├──────────▶ list_files(dir)  ──▶ files and folders  │
+│         ├──────────▶ query_api(path)  ──▶ localhost:42002    │
+│         │                                                    │
+│  ┌──────┴───────┐                                            │
+│  │  Docker      │  app (FastAPI) ─── postgres (data)         │
+│  │  Compose     │  caddy (frontend)                          │
+│  └──────────────┘                                            │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ## Learning advice
 
-Read the tasks, do the setup properly, work with an agent to help you:
+This lab is different from previous ones. You are not following step-by-step instructions — you are building something and iterating until it works. Use your coding agent to help you understand and plan:
 
-> What do we need to do in Task x? Explain, I want to maximize learning.
+> Read task X. What exactly do we need to deliver? Explain, I want to understand.
 
-> Why is this important? What exactly do we need to do?
+> Why does an agent need a loop? Walk me through the flow.
 
-You need an agent that has access to the whole repo to work effectively.
+> My agent failed this question: "...". Diagnose why and suggest a fix.
+
+The agent you build is simple (~100-200 lines). The learning comes from debugging it against the benchmark.
 
 ## Learning outcomes
 
@@ -56,6 +78,10 @@ In simple words, you should be able to say:
 
 ### Required
 
-1. [Basic agent loop](./lab/tasks/required/task-1.md#basic-agent-loop)
-2. [Add tools](./lab/tasks/required/task-2.md)
-3. [Pass the benchmark](./lab/tasks/required/task-3.md)
+1. [Call an LLM from code](./lab/tasks/required/task-1.md#call-an-llm-from-code)
+2. [The documentation agent](./lab/tasks/required/task-2.md#the-documentation-agent)
+3. [The system agent](./lab/tasks/required/task-3.md#the-system-agent)
+
+### Optional (recommended)
+
+1. [Advanced agent features](./lab/tasks/optional/task-1.md#advanced-agent-features)

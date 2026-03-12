@@ -1,317 +1,114 @@
-# Dashboard Frontend
+# The System Agent
 
-<h4>Time</h4>
+In Task 2 you built an agent that reads documentation. But documentation can be outdated — the real system is the source of truth. In this task you will give your agent a new tool (`query_api`) so it can talk to your deployed backend, and teach it to answer two new kinds of questions: static system facts (framework, ports, status codes) and data-dependent queries (item count, scores).
 
-~45 min
+## What you will add
 
-<h4>Purpose</h4>
+You will add a `query_api` tool to the agent you built in Task 2. The agentic loop stays the same — you are just adding one more tool the LLM can call. The agent can now send requests to your deployed backend in addition to reading files.
 
-Add charts to the frontend to visualize the analytics data from Task 2, and learn to integrate a chart library into a `React` application.
+## CLI interface
 
-<h4>Context</h4>
+Same rules as Task 2. The only change: `source` is now optional (system questions may not have a wiki source).
 
-The analytics endpoints are returning data. Now the team wants a visual dashboard so users can see score distributions, submission timelines, and group performance at a glance.
+```bash
+uv run agent.py "How many items are in the database?"
+```
 
-You will use `Chart.js` (via `react-chartjs-2`) to create bar charts, line charts, or tables.
-An AI coding agent can help with the `Chart.js` integration.
+```json
+{
+  "answer": "There are 120 items in the database.",
+  "tool_calls": [
+    {"tool": "query_api", "args": {"method": "GET", "path": "/items/"}, "result": "{\"status_code\": 200, ...}"}
+  ]
+}
+```
 
-<h4>Diagram</h4>
+## New tool: `query_api`
 
-<!-- TODO fill in this section -->
+Call your deployed backend API. Register it as a function-calling schema alongside your existing tools.
 
-<h4>Table of contents</h4>
+- **Parameters:** `method` (string — GET, POST, etc.), `path` (string — e.g., `/items/`), `body` (string, optional — JSON request body).
+- **Returns:** JSON string with `status_code` and `body`.
+- **Authentication:** use `LMS_API_KEY` from `.env.docker.secret` (the backend key, not the LLM key).
 
-- [1. Steps](#1-steps)
-  - [1.1. Follow the `Git workflow`](#11-follow-the-git-workflow)
-  - [1.2. Create a `Lab Task` issue](#12-create-a-lab-task-issue)
-  - [1.3. Install the chart library](#13-install-the-chart-library)
-  - [1.4. Create the dashboard component (AI)](#14-create-the-dashboard-component-ai)
-  - [1.5. Add navigation](#15-add-navigation)
-  - [1.6. Run the type checker](#16-run-the-type-checker)
-  - [1.7. Verify locally](#17-verify-locally)
-  - [1.8. Commit and push your work](#18-commit-and-push-your-work)
-  - [1.9. Deploy to the VM](#19-deploy-to-the-vm)
-  - [1.10. Finish the task](#110-finish-the-task)
-  - [1.11. Check the task using the autochecker](#111-check-the-task-using-the-autochecker)
-- [2. Acceptance criteria](#2-acceptance-criteria)
+Update your system prompt so the LLM knows when to use wiki tools vs `query_api` vs `read_file` on source code.
 
-## 1. Steps
+> **Note:** Two distinct keys: `LMS_API_KEY` (in `.env.docker.secret`) protects your backend endpoints. `LLM_API_KEY` (in `.env.agent.secret`) authenticates with your LLM provider. Don't mix them up.
 
-### 1.1. Follow the `Git workflow`
+## Pass the benchmark
 
-Follow the [`Git workflow`](../../../wiki/git-workflow.md#create-a-lab-task-issue) to complete this task.
+Once `query_api` works, run the evaluation benchmark and iterate until your agent passes.
 
-### 1.2. Create a `Lab Task` issue
+```bash
+uv run run_eval.py
+```
 
-Title: `[Task] Dashboard Frontend`
+The script fetches questions from the autochecker API, runs your agent on each one, and checks the answer. On failure it shows a feedback hint.
 
-### 1.3. Install the chart library
+```
+  ✓ [1/26] How do you resolve a merge conflict?
+  ✓ [2/26] What is a Docker volume used for?
+  ✓ [3/26] What framework does the backend use?
 
-1. To navigate to the frontend directory,
+  ✗ [4/26] You change your Python code and run 'docker compose up -d'...
+    feedback: Think about when Docker rebuilds the image vs reuses the old one.
 
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
+3/26 passed
+```
 
-   ```terminal
-   cd frontend
-   ```
+Fix the failing question, re-run, move on to the next one.
 
-2. To install `Chart.js` and the React wrapper,
+> **Note:** The autochecker bot tests your agent with additional hidden questions not present in `run_eval.py`. These include multi-step challenges that require chaining tools. You need a genuinely working agent — not hard-coded answers.
 
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
+### Debugging workflow
 
-   ```terminal
-   npm install chart.js react-chartjs-2
-   ```
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Agent doesn't use a tool when it should | Tool description too vague for the LLM | Improve the tool's description in the schema |
+| Tool called but returns an error | Bug in tool implementation | Fix the tool code, test it in isolation |
+| Tool called with wrong arguments | LLM misunderstands the schema | Clarify parameter descriptions |
+| Agent times out | Too many tool calls or slow LLM | Reduce max iterations, try a faster model |
+| Answer is close but doesn't match | Phrasing doesn't contain expected keyword | Adjust system prompt to be more precise |
 
-3. To go back to the project root,
+## Deliverables
 
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
+### 1. Plan (`plans/task-3.md`)
 
-   ```terminal
-   cd ..
-   ```
+Before writing code, create `plans/task-3.md`. Describe how you will define the `query_api` tool schema, handle authentication, and update the system prompt.
 
-### 1.4. Create the dashboard component (AI)
+After running the benchmark once, add your initial score, first failures, and iteration strategy.
 
-> [!NOTE]
-> The dashboard should display at least two of the following visualizations:
->
-> - **Bar chart** — score distribution from `/analytics/scores`
-> - **Line chart** — submissions over time from `/analytics/timeline`
-> - **Table** — pass rates from `/analytics/pass-rates` or group performance from `/analytics/groups`
->
-> You can use an AI agent to generate the `Chart.js` integration code.
+### 2. Tool and agent updates (update `agent.py`)
 
-1. Open the [coding agent](../../../wiki/coding-agents.md#what-is-a-coding-agent) in the `frontend/` directory.
-2. Give it a prompt like:
+Add `query_api` as a function-calling schema, implement it with authentication, and update the system prompt. Then iterate until the benchmark passes.
 
-   > "Create a Dashboard component in `frontend/src/Dashboard.tsx` that:
-   > 1. Fetches data from `/analytics/scores?lab=<lab-id>`, `/analytics/timeline?lab=<lab-id>`, and `/analytics/pass-rates?lab=<lab-id>` using the Bearer token from localStorage (key: `api_key`).
-   > 2. Shows a bar chart of score buckets using `react-chartjs-2`.
-   > 3. Shows a line chart of submissions per day.
-   > 4. Shows a table of pass rates per task.
-   > 5. Includes a dropdown to select different labs.
-   > 6. The code must pass `npm run typecheck` (TypeScript strict mode). Use proper types for all API responses — no `any`."
+### 3. Documentation (update `AGENT.md`)
 
-   Replace `<lab-id>` (without `<` and `>`) with a valid lab ID, such as `lab-04`, or any other lab that has data in your environment.
+Update `AGENT.md` to document the `query_api` tool, its authentication, how the LLM decides between wiki and system tools, lessons learned from the benchmark, and your final eval score. At least 200 words.
 
-3. Review the generated code. Make sure it:
+### 4. Tests (5 more tests)
 
-   - Imports from `react-chartjs-2` and registers `Chart.js` components.
-   - Reads the API token from `localStorage` (key: `api_key`) for the `Authorization: Bearer` header.
-   - Renders at least one `<canvas>` element (this is how `Chart.js` renders charts).
-   - Handles loading and error states.
-   - Uses proper `TypeScript` types for API responses (no `any` types).
+Add 5 regression tests for system agent tools. Example questions:
 
-> [!TIP]
-> If you prefer to implement manually, here is the minimal setup for a bar chart:
->
-> ```tsx
-> import { Bar } from 'react-chartjs-2'
-> import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip } from 'chart.js'
->
-> ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip)
-> ```
->
-> Then render `<Bar data={chartData} />` where `chartData` has the `Chart.js` data format.
+- `"What framework does the backend use?"` → expects `read_file` in tool_calls.
+- `"How many items are in the database?"` → expects `query_api` in tool_calls.
 
-### 1.5. Add navigation
+### 5. Deployment
 
-1. Update `frontend/src/App.tsx` to include navigation between the Items page and the Dashboard.
+Deploy the final agent to your VM. Make sure both `.env.agent.secret` (LLM key) and `.env.docker.secret` (backend API key) are configured.
 
-   You can use an AI agent or implement it manually. Complete these steps:
+The autochecker bot will run the full benchmark including hidden questions. You need at least **75%** to pass.
 
-   1. Add a state variable for the current page (e.g., `"items"` or `"dashboard"`).
-   2. Add buttons or links in the header to switch between pages.
-   3. Render the Items table or the Dashboard component based on the current page.
-
-### 1.6. Run the type checker
-
-> [!IMPORTANT]
-> AI coding agents often generate code with type errors. `TypeScript` strict mode catches bugs like `undefined is not a function` **before** they reach the browser.
-
-1. To navigate to the frontend directory,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   cd frontend
-   ```
-
-2. To run the type checker,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   npm run typecheck
-   ```
-
-3. Fix any errors reported by the type checker. Common issues:
-
-   - Missing type annotations on function parameters or return values.
-   - Using `any` instead of a proper interface for API responses.
-   - Accessing properties on possibly `undefined` values without null checks.
-
-   > 🟩 **Tip**
-   >
-   > If you used an AI agent, give it the error output and ask it to fix the type errors. Include the instruction "Do not use `any` types" in your prompt.
-
-4. To go back to the project root,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   cd ..
-   ```
-
-### 1.7. Verify locally
-
-1. To navigate to the frontend directory,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   cd frontend
-   ```
-
-2. Configure the environment. Complete these steps:
-
-   1. Open the file [`frontend/.env.example`](../../../frontend/.env.example) ([how to open a file](../../../wiki/vs-code.md#open-the-file)).
-   2. Copy it to `frontend/.env`.
-   3. Set `VITE_API_TARGET` to the URL of your backend API, for example `http://<your-vm-ip-address>:42002`.
-
-      If you changed [`CADDY_HOST_PORT`](../../../wiki/dotenv-docker-secret.md#caddy_host_port) in [`.env.docker.secret`](../../../wiki/dotenv-docker-secret.md#what-is-envdockersecret), use your value instead of `42002`.
-
-3. To install dependencies,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   npm install
-   ```
-
-4. To start the dev server,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   npm run dev
-   ```
-
-5. Open the URL shown in the terminal output in a browser.
-6. Connect with your API key.
-7. Navigate to the Dashboard page.
-
-   You should see charts rendering with data from the analytics endpoints.
-
-   > 🟦 **Note**
-   >
-   > Make sure you have run `POST /pipeline/sync` at least once (from Task 1) so there is data for the analytics endpoints to return.
-
-### 1.8. Commit and push your work
-
-1. [Commit](../../../wiki/git-workflow.md#commit-changes) your changes.
-
-   Use this commit message:
-
-   ```text
-   feat: add analytics dashboard with charts
-   ```
-
-2. To push your task branch,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   git push -u origin <task-branch>
-   ```
-
-   Replace [`<task-branch>`](../../../wiki/git-workflow.md#task-branch).
-
-### 1.9. Deploy to the VM
-
-1. To navigate to the project directory on your VM,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   cd se-toolkit-lab-5
-   ```
-
-2. To fetch updates from the remote,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   git fetch origin
-   ```
-
-3. To switch to your task branch,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   git checkout <task-branch>
-   ```
-
-   Replace [`<task-branch>`](../../../wiki/git-workflow.md#task-branch).
-
-4. To pull the latest changes,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   git pull
-   ```
-
-5. To restart the services,
-
-   [run in the `VS Code Terminal`](../../../wiki/vs-code.md#run-a-command-in-the-vs-code-terminal):
-
-   ```terminal
-   docker compose --env-file .env.docker.secret up --build caddy -d
-   ```
-
-6. Open in a browser: `http://<your-vm-ip-address>:42002`.
-
-   If you changed [`CADDY_HOST_PORT`](../../../wiki/dotenv-docker-secret.md#caddy_host_port) in [`.env.docker.secret`](../../../wiki/dotenv-docker-secret.md#what-is-envdockersecret), use your value instead of `42002`.
-
-7. Connect with your API key.
-8. Navigate to the Dashboard page.
-
-   You should see charts rendering with data from the analytics endpoints.
-
-   <details><summary><b>Troubleshooting (click to open)</b></summary>
-
-   <h4>Charts do not render</h4>
-
-   Open the browser developer tools console and check for errors. Common issues: missing `Chart.js` component registration, incorrect data format, API returning errors.
-
-   <h4>Container build fails</h4>
-
-   Check that `frontend/package.json` includes `chart.js` and `react-chartjs-2` in dependencies (not devDependencies).
-
-   </details>
-
-### 1.10. Finish the task
-
-1. [Create a PR](../../../wiki/git-workflow.md#create-a-pr-to-the-main-branch-in-your-fork) with your changes.
-2. [Get a PR review](../../../wiki/git-workflow.md#get-a-pr-review) and complete the subsequent steps in the `Git workflow`.
-
-### 1.11. Check the task using the autochecker
-
-[Check the task using the autochecker `Telegram` bot](../../../wiki/autochecker.md#check-the-task-using-the-autochecker-bot).
-
----
-
-## 2. Acceptance criteria
-
-- [ ] Issue has the correct title.
-- [ ] `react-chartjs-2` is listed in `frontend/package.json` dependencies.
-- [ ] The Dashboard component imports from `Chart.js`.
-- [ ] The frontend renders at least one `<canvas>` element (chart).
-- [ ] Navigation exists between the Items page and the Dashboard.
-- [ ] `npm run typecheck` passes with no errors.
-- [ ] The production build is deployed on the VM.
-- [ ] PR is approved.
-- [ ] PR is merged.
+## Acceptance criteria
+
+- [ ] `plans/task-3.md` exists with the implementation plan and benchmark diagnosis.
+- [ ] `agent.py` defines `query_api` as a function-calling schema.
+- [ ] `query_api` authenticates with `LMS_API_KEY`.
+- [ ] The agent answers static system questions correctly (framework, ports, status codes).
+- [ ] The agent answers data-dependent questions with plausible values.
+- [ ] `run_eval.py` passes all local questions.
+- [ ] `AGENT.md` documents the final architecture and lessons learned (at least 200 words).
+- [ ] 5 tool-calling regression tests exist and pass.
+- [ ] The agent works on the VM via SSH.
+- [ ] The agent passes the autochecker bot benchmark (≥75%).
+- [ ] [Git workflow](../../../wiki/git-workflow.md): issue `[Task] The System Agent`, branch, PR with `Closes #...`, partner approval, merge.
