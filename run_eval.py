@@ -221,18 +221,28 @@ def _check_question(q: dict, data: dict) -> tuple[bool, str]:
         source = data.get("source", "")
         if not source:
             return False, f"    Missing 'source' field (expected a file reference)"
-        if not _match(source, expected_source):
+        # Handle both string and list formats for source
+        if isinstance(source, list):
+            source_str = " ".join(source)
+        else:
+            source_str = str(source)
+        if not _match(source_str, expected_source):
             feedback = q.get("feedback")
             if feedback:
                 return False, f"    {YELLOW}hint: {feedback}{RESET}"
             else:
-                return False, f"    Source '{source}' doesn't match expected"
+                return False, f"    Source '{source_str}' doesn't match expected"
 
     # Check tool usage
     check_tools = q.get("check_tools")
     if check_tools:
         tool_calls = data.get("tool_calls", [])
-        tools_used = {tc.get("tool") for tc in tool_calls} if tool_calls else set()
+        # Handle both 'tool' and 'name' field names for tool calls
+        tools_used = set()
+        for tc in tool_calls:
+            tool_name = tc.get("tool") or tc.get("name", "")
+            if tool_name:
+                tools_used.add(tool_name)
         missing = set(check_tools) - tools_used
         if missing:
             return False, (

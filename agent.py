@@ -18,7 +18,7 @@ import httpx
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Allowed directories for file access
-ALLOWED_ROOTS = ["wiki", "docs", "contributing"]
+ALLOWED_ROOTS = ["wiki", "docs", "contributing", "backend"]
 
 # Allowed API endpoints for security
 ALLOWED_API_ENDPOINTS = [
@@ -34,15 +34,28 @@ SYSTEM_PROMPT = """You are a documentation and system assistant for a Learning M
 You help users find information in project documentation AND query the live system.
 
 You have access to these tools:
-- read_file: Read documentation files (wiki/, docs/, contributing/)
+- read_file: Read documentation files (wiki/, docs/, contributing/, backend/)
 - list_files: List files in a directory
 - query_api: Query the backend LMS API for live system data
 
 When answering questions:
 1. For documentation questions (how to, concepts, workflows) → use read_file/list_files
 2. For system data questions (counts, status, current data) → use query_api
-3. Cite your sources - include file paths or API endpoints in the 'source' field
-4. Be concise and accurate
+3. For code questions (frameworks, libraries, implementation) → use read_file on backend/app/*.py
+4. Cite your sources - include file paths or API endpoints in the 'source' field
+5. Be concise and accurate
+6. When asked to "list" multiple items, read ALL relevant files before providing your final answer
+
+Project structure:
+- backend/app/main.py - Main FastAPI application
+- backend/app/settings.py - Configuration
+- backend/app/routers/items.py - Learning items and tasks
+- backend/app/routers/learners.py - Learner management
+- backend/app/routers/interactions.py - Interaction logs
+- backend/app/routers/analytics.py - Analytics and statistics
+- backend/app/routers/pipeline.py - ETL pipeline
+- wiki/ - Project documentation
+- docs/ - Additional docs
 
 Available API endpoints:
 - /items - List all learning items (labs, tasks)
@@ -51,7 +64,13 @@ Available API endpoints:
 - /interactions - List interaction logs
 - /analytics/summary - Get analytics summary
 
-Always respond in the same language as the user's question."""
+Always respond in the same language as the user's question.
+
+IMPORTANT: Provide a complete final answer in your last message. Do not say "let me continue" - instead provide the full answer based on all the information you've gathered.
+
+When API returns an empty list [], it means there are zero items - report this clearly (e.g., "There are 0 items in the database"). Do NOT make up numbers - only report what the API actually returns.
+
+For questions about HTTP status codes or authentication errors, use query_api with use_auth=false to make requests without authentication and observe the error response."""
 
 
 class AgentSettings(BaseSettings):
@@ -160,7 +179,7 @@ def list_files(path: str) -> list[str]:
 
 
 def query_api(
-    endpoint: str, method: str = "GET", params: dict[str, Any] | None = None
+    endpoint: str, method: str = "GET", params: dict[str, Any] | None = None, use_auth: bool = True
 ) -> dict[str, Any]:
     """Query the backend LMS API with authentication.
 
@@ -168,6 +187,7 @@ def query_api(
         endpoint: API endpoint path (e.g., '/api/items')
         method: HTTP method (GET or POST)
         params: Optional query parameters or JSON body
+        use_auth: Whether to include authentication header (default: true)
 
     Returns:
         API response as dict, or error dict
@@ -187,10 +207,11 @@ def query_api(
 
     # Build URL
     url = f"{settings.lms_api_base}{endpoint}"
-    headers = {
-        "Authorization": f"Bearer {settings.lms_api_key}",
-        "Content-Type": "application/json",
-    }
+    
+    # Build headers - include auth only if requested
+    headers = {"Content-Type": "application/json"}
+    if use_auth:
+        headers["Authorization"] = f"Bearer {settings.lms_api_key}"
 
     print(f"query_api: {method} {url}", file=sys.stderr)
 
@@ -276,6 +297,10 @@ TOOLS = [
                         "type": "object",
                         "description": "Optional query parameters or JSON body",
                     },
+                    "use_auth": {
+                        "type": "boolean",
+                        "description": "Whether to include authentication header (default: true). Set to false to test authentication errors.",
+                    },
                 },
                 "required": ["endpoint"],
             },
@@ -299,13 +324,14 @@ def execute_tool_call(
         endpoint = arguments.get("endpoint", "")
         method = arguments.get("method", "GET")
         params = arguments.get("params")
-        return query_api(endpoint, method, params)
+        use_auth = arguments.get("use_auth", True)
+        return query_api(endpoint, method, params, use_auth)
     else:
         return f"Error: Unknown tool: {name}"
 
 
 def call_llm_with_tools(
-    question: str, settings: AgentSettings, max_iterations: int = 5
+    question: str, settings: AgentSettings, max_iterations: int = 6
 ) -> tuple[str, list[str], list[dict[str, Any]]]:
     """Call the LLM API with tool support and agentic loop.
 
