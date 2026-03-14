@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI documentation agent with tool support.
+"""CLI system agent with documentation and API query support.
 
 Usage:
     uv run agent.py "Your question here"
@@ -20,34 +20,56 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Allowed directories for file access
 ALLOWED_ROOTS = ["wiki", "docs", "contributing"]
 
-# System prompt for the documentation agent
-SYSTEM_PROMPT = """You are a documentation assistant for a software engineering project.
-You help users find information in the project documentation.
+# Allowed API endpoints for security
+ALLOWED_API_ENDPOINTS = [
+    "/items",
+    "/tasks",
+    "/learners",
+    "/interactions",
+    "/analytics",
+]
+
+# System prompt for the system agent
+SYSTEM_PROMPT = """You are a documentation and system assistant for a Learning Management Service.
+You help users find information in project documentation AND query the live system.
 
 You have access to these tools:
-- read_file: Read the content of a file (path must be relative, e.g., 'wiki/git-workflow.md')
-- list_files: List files in a directory (path must be relative, e.g., 'wiki/')
+- read_file: Read documentation files (wiki/, docs/, contributing/)
+- list_files: List files in a directory
+- query_api: Query the backend LMS API for live system data
 
 When answering questions:
-1. Use tools to find relevant information
-2. Cite your sources - include file paths in the 'source' field
-3. Be concise and accurate
-4. Only read files from wiki/, docs/, and contributing/ directories
+1. For documentation questions (how to, concepts, workflows) → use read_file/list_files
+2. For system data questions (counts, status, current data) → use query_api
+3. Cite your sources - include file paths or API endpoints in the 'source' field
+4. Be concise and accurate
+
+Available API endpoints:
+- /items - List all learning items (labs, tasks)
+- /tasks - List all tasks
+- /learners - List all learners  
+- /interactions - List interaction logs
+- /analytics/summary - Get analytics summary
 
 Always respond in the same language as the user's question."""
 
 
 class AgentSettings(BaseSettings):
-    """LLM configuration from .env.agent.secret."""
+    """LLM and LMS configuration from .env files."""
 
     model_config = SettingsConfigDict(
         env_file=".env.agent.secret",
         env_file_encoding="utf-8",
     )
 
+    # LLM configuration
     llm_api_key: str
     llm_api_base: str
     llm_model: str
+
+    # LMS API configuration (optional, with defaults)
+    lms_api_base: str = "http://127.0.0.1:42001"
+    lms_api_key: str = "my-secret-api-key"
 
 
 def load_settings() -> AgentSettings:
@@ -89,6 +111,21 @@ def validate_path(relative_path: str) -> Path:
     )
 
 
+def validate_api_endpoint(endpoint: str) -> bool:
+    """Validate that an API endpoint is allowed."""
+    # Normalize endpoint
+    endpoint = endpoint.strip()
+    if not endpoint.startswith("/"):
+        endpoint = "/" + endpoint
+
+    # Check against allowed endpoints
+    for allowed in ALLOWED_API_ENDPOINTS:
+        if endpoint.startswith(allowed):
+            return True
+
+    return False
+
+
 def read_file(path: str) -> str:
     """Read the content of a file."""
     try:
@@ -120,6 +157,66 @@ def list_files(path: str) -> list[str]:
         return sorted(items)
     except Exception as e:
         return [f"Error listing {path}: {e}"]
+
+
+def query_api(
+    endpoint: str, method: str = "GET", params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Query the backend LMS API with authentication.
+
+    Args:
+        endpoint: API endpoint path (e.g., '/api/items')
+        method: HTTP method (GET or POST)
+        params: Optional query parameters or JSON body
+
+    Returns:
+        API response as dict, or error dict
+    """
+    settings = load_settings()
+
+    # Validate endpoint
+    if not validate_api_endpoint(endpoint):
+        return {
+            "error": f"Invalid endpoint: {endpoint}",
+            "allowed": ALLOWED_API_ENDPOINTS,
+        }
+
+    # Normalize endpoint: ensure trailing slash for FastAPI compatibility
+    if not endpoint.endswith("/"):
+        endpoint = endpoint + "/"
+
+    # Build URL
+    url = f"{settings.lms_api_base}{endpoint}"
+    headers = {
+        "Authorization": f"Bearer {settings.lms_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    print(f"query_api: {method} {url}", file=sys.stderr)
+
+    try:
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            if method.upper() == "GET":
+                response = client.get(url, headers=headers, params=params)
+            elif method.upper() == "POST":
+                response = client.post(url, headers=headers, json=params)
+            else:
+                return {"error": f"Unsupported method: {method}"}
+
+            response.raise_for_status()
+            data = response.json()
+            print(f"query_api: {endpoint} - success", file=sys.stderr)
+            return data
+
+    except httpx.HTTPStatusError as e:
+        print(f"query_api: HTTP error {e.response.status_code}", file=sys.stderr)
+        return {"error": f"HTTP {e.response.status_code}", "detail": e.response.text}
+    except httpx.RequestError as e:
+        print(f"query_api: Request error: {e}", file=sys.stderr)
+        return {"error": "Connection failed", "detail": str(e)}
+    except Exception as e:
+        print(f"query_api: Unexpected error: {e}", file=sys.stderr)
+        return {"error": "Unexpected error", "detail": str(e)}
 
 
 # Tool definitions for LLM function calling
@@ -158,10 +255,38 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_api",
+            "description": "Query the backend LMS API for live system data",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "description": "API endpoint path (e.g., '/items', '/tasks')",
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST"],
+                        "description": "HTTP method (default: GET)",
+                    },
+                    "params": {
+                        "type": "object",
+                        "description": "Optional query parameters or JSON body",
+                    },
+                },
+                "required": ["endpoint"],
+            },
+        },
+    },
 ]
 
 
-def execute_tool_call(name: str, arguments: dict[str, Any]) -> Any:
+def execute_tool_call(
+    name: str, arguments: dict[str, Any], settings: AgentSettings
+) -> Any:
     """Execute a tool call and return the result."""
     print(f"Executing tool: {name}({arguments})", file=sys.stderr)
 
@@ -169,6 +294,12 @@ def execute_tool_call(name: str, arguments: dict[str, Any]) -> Any:
         return read_file(arguments.get("path", ""))
     elif name == "list_files":
         return list_files(arguments.get("path", ""))
+    elif name == "query_api":
+        # Load settings once and pass through
+        endpoint = arguments.get("endpoint", "")
+        method = arguments.get("method", "GET")
+        params = arguments.get("params")
+        return query_api(endpoint, method, params)
     else:
         return f"Error: Unknown tool: {name}"
 
@@ -259,19 +390,26 @@ def call_llm_with_tools(
             all_tool_calls.append(tool_call_record)
 
             # Execute tool
-            result = execute_tool_call(name, arguments)  # type: ignore[arg-type]
+            result = execute_tool_call(name, arguments, settings)  # type: ignore[arg-type]
 
             # Track sources
             if name == "read_file" and not str(result).startswith("Error"):
                 source_path = str(arguments.get("path", ""))  # type: ignore[unknown-argument-type]
                 sources.add(source_path)
+            elif name == "query_api" and not (
+                isinstance(result, dict) and "error" in result
+            ):
+                endpoint = str(arguments.get("endpoint", ""))  # type: ignore[unknown-argument-type]
+                sources.add(endpoint)
 
             # Add tool result to conversation
             messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.get("id", ""),
-                    "content": str(result),
+                    "content": json.dumps(result)
+                    if isinstance(result, dict)
+                    else str(result),
                 }
             )
 
@@ -308,6 +446,7 @@ def main() -> None:
     settings = load_settings()
     print(f"Loaded settings from .env.agent.secret", file=sys.stderr)
     print(f"Model: {settings.llm_model}", file=sys.stderr)
+    print(f"LMS API: {settings.lms_api_base}", file=sys.stderr)
 
     # Call LLM with tools
     answer, sources, tool_calls = call_llm_with_tools(question, settings)
@@ -315,7 +454,7 @@ def main() -> None:
     # Output JSON to stdout
     result: dict[str, Any] = {
         "answer": answer,
-        "source": sources,
+        "source": list(sources),
         "tool_calls": tool_calls,
     }
     print(json.dumps(result))
